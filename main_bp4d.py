@@ -12,21 +12,23 @@ import argparse
 from torch.utils.tensorboard import SummaryWriter
 
 #args and settings
+#这里加一个选数据集的
 warnings.filterwarnings("ignore")
 writer1 = SummaryWriter('runs_20')
 parser = argparse.ArgumentParser('parameters', add_help=False)
 parser.add_argument('--lr', default=0.001, type=float)
-parser.add_argument('--batchsize', default=128, type=int)
+parser.add_argument('--batchsize', default=64, type=int)
 parser.add_argument('--device', default="cuda:1", type=str)
 parser.add_argument('--num_epoch', default=300, type=int)
-parser.add_argument('--num_workers', default=4, type=int)
+parser.add_argument('--num_workers', default=0, type=int)
 parser.add_argument('--N_fold', default=6, type=int, help="the ratio of train and validation data")
 parser.add_argument('--PATH_Checkpoint', default="./checkpoint/CHECKPOINT_FILE", type=str)
 parser.add_argument('--PATH_pretrain', default="./Resnet34model/model_state.pth", type=str)
 parser.add_argument('--PATH_dataset', default="./", type=str)
+parser.add_argument('--datatype', default="dynamic", type=str, help="choose from dynamic dynamic_one_frame static")
 parser.add_argument('--dataset', default="BP4D", type=str)
 parser.add_argument('--FirstTimeRunning', default=None, type=str, help="No means reading from the checkpoint_file")
-parser.add_argument('--model', default=None, type=str, help="choose from Resnet34、Lnet、Transformer and vit")
+parser.add_argument('--model', default=None, type=str, help="choose from Resnet34、Lnet、Transformer、TransformerMLP、Vit、ResVit、Resnet3D and Transformer3D")
 args = parser.parse_args()
 
 # weight
@@ -90,14 +92,14 @@ def train(epoch):
     acc_sum_allset = [0 for i in range(len(au_keys))]   #整个set的概率和
     total_sum_allset = [0 for i in range(len(au_keys))] #整个set的AU数量
     acc_in_allset = [0 for i in range(len(au_keys))] #整个set的准确率
-    weight=weighted(trainloader).to(device)
+    weight = weighted(trainloader).to(device)
     for batch_idx, (inputs, targets) in enumerate(tqdm(trainloader)):
         inputs, targets = inputs.to(device), targets.to(device).squeeze(dim=1).float()
         optimizer.zero_grad()
         # inputs.type/shape:torch.Tensor/[128,3,224,224]
         # targets的shape是batch_size * 12
-        outputs = net(inputs)
-        # functional.BCE_with_logits自范带对预测分数进行sigmoid操作，因此可以无所谓outputs的取值围
+        outputs = net(inputs) #train还是这么写 验证集也不用改 在MyNets里面把2DCNN和3DCNN写到一起去 然后在forward函数里把静态动态分开，想办法把两者的feature map进行concat reshape再送进Transformer里面
+        # functional.BCE_with_logits自范带对预测分数进行sigmoid操作，因此可以无所谓outputs的取值
         loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='mean',pos_weight=weight).to(device)
         # flood = (loss - 0.6).abs() + 0.6
         loss.backward()    #loss flooding?
@@ -162,22 +164,17 @@ def data_augmentation():
     sequences, _ = BP4D_load_data.get_sequences_task()   # sequences, _ filenames
     train_seq, val_seq = get_train_val(sequences)   #MyDatasets.get_train_val()
     transform_train = transforms.Compose([
+        transforms.ToTensor(),
         transforms.RandomCrop(224),
         transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
     transform_val = transforms.Compose([
-        transforms.CenterCrop(224),
         transforms.ToTensor(),
+        transforms.CenterCrop(224),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
-    trainset = MyBP4D(train_seq, train=True, transform=transform_train)
-    trainloader = DataLoader(trainset, batch_size=batchsize, shuffle=True, num_workers=args.num_workers)
-
-    valset = MyBP4D(val_seq, train=False, transform=transform_val)
-    valloader = DataLoader(valset, batch_size=batchsize, shuffle=True, num_workers=args.num_workers)
-    return trainloader,valloader
+    return train_seq,val_seq,transform_train,transform_val
 # ---------------------------------------------------------------------------------
 if __name__=="__main__":
     # parameters
@@ -189,8 +186,13 @@ if __name__=="__main__":
     au_keys = ['au1', 'au2', 'au4', 'au6', 'au7', 'au10', 'au12', 'au14', 'au15', 'au17', 'au23', 'au24']
 
     #Datalaoder
-    trainloader,valloader=data_augmentation()
-
+    print("The train set:")
+    train_seq,val_seq,transform_train,transform_val=data_augmentation()
+    trainset = MyBP4D(train_seq, train=True, transform=transform_train)
+    trainloader = DataLoader(trainset, batch_size=batchsize, shuffle=True, num_workers=args.num_workers)
+    print("The validation set:")
+    valset = MyBP4D(val_seq, train=False, transform=transform_val)
+    valloader = DataLoader(valset, batch_size=batchsize, shuffle=False, num_workers=args.num_workers)
     #check CUDA
     if torch.cuda.is_available():
         deviceidx = [0, 1]
@@ -200,7 +202,9 @@ if __name__=="__main__":
 
     #Models
     print("start the net")
-    Nets = {"Resnet34":ResNet34(12),"Lnet":Lnet(12),"Transformer":Transformer(12),"vit":vit(12),"Resvit":Resvit(12)}
+    #重新创两个文件，一个叫Lnet 一个叫Transformer 把模块分开来：单独的Resnet包括2D 3D 单独的Lnet 单独的Transformer： 只使用vit，Resnet34_2D+Encoder+fc,Resnet34_2D+Encoder+MLP,Resnet34_2D+vit
+    # MixedResnet+Encoder+fc,MixedResnet+Encoder+MLP,MixedResnet+vit
+    Nets = {"Resnet34":ResNet34(12),"Lnet":Lnet(12),"Transformer":Transformer(12),"Vit":Vit(12),"Resvit":ResVit(12),"TransformerMLP":TransformerMlp(12),"Resnet3D":Resnet3D(12),"Transformer3D":Transformer3D(12)}
     net = Nets[args.model]
     # if torch.cuda.device_count() > 1:  # 查看当前电脑的可用的gpu的数量，若gpu数量>1,就多gpu训练
     #     net = torch.nn.DataParallel(net,deviceidx)    #多gpu训练,自动选择gpu

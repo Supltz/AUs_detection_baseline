@@ -5,6 +5,7 @@ from PIL import Image
 import random
 import os
 import BP4D_load_data
+import numpy as np
 
 # Datasets
 
@@ -59,12 +60,23 @@ class MyBP4D(Dataset):
             image, target = self._train_data[index], self._train_labels[index]
         else:
             image, target = self._val_data[index], self._val_labels[index]
-        image = Image.fromarray(image)
+        #这里的image是四维的array 要再把他分开 分别做transforms 之后再合并
+        frame1 = image[0]
+        frame2 = image[1]
+        frame3 = image[2]
+        frame1 = Image.fromarray(frame1)
+        frame2 = Image.fromarray(frame2)
+        frame3 = Image.fromarray(frame3)
         if self._transform is not None:
-            image = self._transform(image)
+            frame1 = self._transform(frame1)
+            frame2 = self._transform(frame2)
+            frame3 = self._transform(frame3)
+        frames = np.concatenate([np.expand_dims(frame1, axis=0), np.expand_dims(frame2, axis=0),
+                                 np.expand_dims(frame3, axis=0)], axis=0)
+
         if self._target_transform is not None:
             target = self._target_transform(target)
-        return image, target
+        return frames, target
 
     def __len__(self):
         if self._train:
@@ -114,6 +126,7 @@ class MyBP4D(Dataset):
 #     train, val = seq[offset:], seq[:offset]
 #     return train, val
 
+#这里还要再分一块出来做测试集  这个放在最后再做
 def get_train_val(seq, fold=0):                  # cross_validation ? 验证集的前几个可能有空值了
     # 划分train和validation
     import main_bp4d

@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 import pickle
+from tqdm import tqdm
 
 
 
@@ -70,11 +71,11 @@ def get_sequences_task():
 #         pickle.dump((images, labels), open(os.path.join(pkl_folder, '{}.pkl'.format(seq)), 'wb'))
 #         print('the sequence {} has been dumped'.format(seq))
 
-
 def load_data(sequences):
     # 用于读取pkl中的数据，并将不同序列的数据整合到一起。用于获得train和validation等
     import main_bp4d
     pkl_folder = os.path.join(main_bp4d.args.PATH_dataset)
+    type = main_bp4d.args.datatype
     for seq in sequences:
         print('loading the pkl: {}.pkl'.format(seq))
         temp_images, temp_labels = pickle.load(open(os.path.join(pkl_folder, '{}.pkl'.format(seq)), 'rb'))
@@ -84,12 +85,58 @@ def load_data(sequences):
         else:
             images = images + temp_images
             labels = np.concatenate((labels, temp_labels), axis=0)
-    i=0                                                        #load的时候去掉空值标签
+    print("Erase the dirty data")
+    i=0
+    pbar = tqdm(i=len(labels)-1)
     while(i!=len(labels)):
         if(sum(labels[i,:])==0):
             labels = np.delete(labels, i, axis=0)
             images.pop(i)
         else:
             i=i+1
+            pbar.update(1)
+    pbar.close()
     # 返回images是list，单个值对应单张图片,shape(240,240,3)。labels是numpy.ndarray
-    return images, labels #train:124048   删除后：113149    validation删除后:22079
+    #返回值要有三种选择 一种返回11W张 一种返回8W张3各一组 一种返回8W张分开的  验证集也是这三种选择  还要进行Transpose 变成（N,C,T,H,W）
+    if(type == "static"):
+        return images, labels #train:124048   删除后：113149    validation删除后:22079
+    elif(type == "dynamic"):
+        j = 10
+        D_frames = []
+        D_labels = []
+        print("Preparing the dynamic data:")
+        pbar = tqdm(j=len(labels) - 11)
+        while (j != len(labels) - 10):
+            if (any(labels[j] != labels[j - 10]) and any(labels[j] != labels[j + 10])):
+                frames = np.concatenate([np.expand_dims(images[j - 10], axis=0), np.expand_dims(images[j], axis=0),
+                                         np.expand_dims(images[j + 10], axis=0)], axis=0)
+                D_frames.append(frames)
+                D_labels.append(labels[j])
+                j = j + 1
+                pbar.update(1)
+            else:
+                j = j + 1
+                pbar.update(1)
+        pbar.close()
+        return D_frames,D_labels
+    elif(type == "dynamic_one_frame"):
+        j = 10
+        D_one_frame = []
+        D_one_labels = []
+        print("Preparing the dynamic data(in single frame):")
+        pbar = tqdm(j=len(labels) - 11)
+        while (j != len(labels) - 10):
+            if (any(labels[j] != labels[j - 10]) and any(labels[j] != labels[j + 10])):
+                D_one_frame.append(images[j - 10])
+                D_one_labels.append(labels[j - 10])
+                D_one_frame.append(images[j])
+                D_one_labels.append(labels[j])
+                D_one_frame.append(images[j + 10])
+                D_one_labels.append(labels[j + 10])
+                j = j + 1
+                pbar.update(1)
+            else:
+                j = j + 1
+                pbar.update(1)
+        pbar.close()
+        return D_one_frame,D_one_labels

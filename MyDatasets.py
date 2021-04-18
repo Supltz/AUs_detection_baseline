@@ -1,4 +1,3 @@
-
 from torch.utils.data import Dataset
 
 from PIL import Image
@@ -112,19 +111,6 @@ class MyBP4D(Dataset):
 #             return len(self._train_data)
 #         return len(self._val_data)
 
-
-# def get_sequences(path):
-#     for root, dirs, files in os.walk(path):
-#         if len(dirs) > 1:
-#             return dirs
-
-# def get_val(seq, ratio=0.2):
-#     # 划分数据集
-#     total = len(seq)
-#     offset = int(total * ratio)
-#     random.shuffle(seq)
-#     train, val = seq[offset:], seq[:offset]
-#     return train, val
 
 #这里还要再分一块出来做测试集  这个放在最后再做
 def get_train_val(seq, fold=0):                  # cross_validation ? 验证集的前几个可能有空值了

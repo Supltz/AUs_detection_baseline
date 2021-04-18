@@ -1,7 +1,8 @@
 from torch.utils.data import  DataLoader
 import torch.optim as optim
 from tqdm import tqdm
-from myNets import *
+from L_Net import *
+from Transformers import *
 #from sklearn.metrics import f1_score
 from MyDatasets import *
 import torch.nn.functional as F
@@ -25,10 +26,10 @@ parser.add_argument('--N_fold', default=6, type=int, help="the ratio of train an
 parser.add_argument('--PATH_Checkpoint', default="./checkpoint/CHECKPOINT_FILE", type=str)
 parser.add_argument('--PATH_pretrain', default="./Resnet34model/model_state.pth", type=str)
 parser.add_argument('--PATH_dataset', default="./", type=str)
-parser.add_argument('--datatype', default="dynamic", type=str, help="choose from dynamic dynamic_one_frame static")
+parser.add_argument('--datatype', default=None, type=str, help="choose from dynamic dynamic_in_frames static")
 parser.add_argument('--dataset', default="BP4D", type=str)
 parser.add_argument('--FirstTimeRunning', default=None, type=str, help="No means reading from the checkpoint_file")
-parser.add_argument('--model', default=None, type=str, help="choose from Resnet34、Lnet、Transformer、TransformerMLP、Vit、ResVit、Resnet3D and Transformer3D")
+parser.add_argument('--model', default=None, type=str, help="choose from ResNet34,L_Net,Transformer,ViT,ResViT,TransformerMLP,ResNet3D,Transformer3D,Transformer3DMlp,ViT3D")
 args = parser.parse_args()
 
 # weight
@@ -186,8 +187,8 @@ if __name__=="__main__":
     au_keys = ['au1', 'au2', 'au4', 'au6', 'au7', 'au10', 'au12', 'au14', 'au15', 'au17', 'au23', 'au24']
 
     #Datalaoder
-    print("The train set:")
     train_seq,val_seq,transform_train,transform_val=data_augmentation()
+    print("The train set:")
     trainset = MyBP4D(train_seq, train=True, transform=transform_train)
     trainloader = DataLoader(trainset, batch_size=batchsize, shuffle=True, num_workers=args.num_workers)
     print("The validation set:")
@@ -202,9 +203,9 @@ if __name__=="__main__":
 
     #Models
     print("start the net")
-    #重新创两个文件，一个叫Lnet 一个叫Transformer 把模块分开来：单独的Resnet包括2D 3D 单独的Lnet 单独的Transformer： 只使用vit，Resnet34_2D+Encoder+fc,Resnet34_2D+Encoder+MLP,Resnet34_2D+vit
-    # MixedResnet+Encoder+fc,MixedResnet+Encoder+MLP,MixedResnet+vit
-    Nets = {"Resnet34":ResNet34(12),"Lnet":Lnet(12),"Transformer":Transformer(12),"Vit":Vit(12),"Resvit":ResVit(12),"TransformerMLP":TransformerMlp(12),"Resnet3D":Resnet3D(12),"Transformer3D":Transformer3D(12)}
+    Nets = {"ResNet34":ResNet34(12),"L_Net":L_Net(12),"Transformer":Transformer(12),"ViT":ViT(12),
+            "ResViT":ResViT(12),"TransformerMLP":TransformerMlp(12),"ResNet3D":Resnet3D(12),
+            "Transformer3D":Transformer3D(12),"Transformer3DMlp":Transformer3DMLP(12),"ViT3D":ViT3D(12)}
     net = Nets[args.model]
     # if torch.cuda.device_count() > 1:  # 查看当前电脑的可用的gpu的数量，若gpu数量>1,就多gpu训练
     #     net = torch.nn.DataParallel(net,deviceidx)    #多gpu训练,自动选择gpu

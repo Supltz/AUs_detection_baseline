@@ -3,17 +3,14 @@ import torch.optim as optim
 from tqdm import tqdm
 from L_Net import *
 from Transformers import *
-#from sklearn.metrics import f1_score
 from MyDatasets import *
 import torch.nn.functional as F
 from torchvision import transforms
-#import numpy as np
 import warnings
 import argparse
 from torch.utils.tensorboard import SummaryWriter
 
 #args and settings
-#这里加一个选数据集的
 warnings.filterwarnings("ignore")
 writer1 = SummaryWriter('runs_20')
 parser = argparse.ArgumentParser('parameters', add_help=False)
@@ -29,7 +26,7 @@ parser.add_argument('--PATH_dataset', default="./", type=str)
 parser.add_argument('--datatype', default=None, type=str, help="choose from dynamic dynamic_in_frames static")
 parser.add_argument('--dataset', default="BP4D", type=str)
 parser.add_argument('--FirstTimeRunning', default=None, type=str, help="No means reading from the checkpoint_file")
-parser.add_argument('--model', default=None, type=str, help="choose from ResNet34,L_Net,Transformer,ViT,ResViT,TransformerMLP,ResNet3D,Transformer3D,Transformer3DMlp,ViT3D")
+parser.add_argument('--model', default=None, type=str, help="choose from ResNet34,L_Net,Transformer,Vit,ResViT,TransformerMLP,ResNet3D,Transformer3D,Transformer3DMlp,ViT3D")
 args = parser.parse_args()
 
 # weight
@@ -47,6 +44,46 @@ def weighted(dataloader):
         weight.append((Alldata-total_in_epoch[i])/total_in_epoch[i])
     weight_to_tensor=torch.FloatTensor(weight)
     return weight_to_tensor
+
+
+def Get_TPs(outputs, targets,TPs_in_allset,TNs_in_allset,FNs_in_allset,FPs_in_allset):
+    m = nn.Sigmoid()
+    predicted = m(outputs)
+    AU_TP= []
+    AU_TN = []
+    AU_FN = []
+    AU_FP = []
+    for i in range(len(predicted)):
+        for j in range(len(au_keys)):
+            if(predicted[i,j].item()<0.5):
+                predicted[i,j]=0
+            else:
+                predicted[i,j]=1
+    for i in range(len(au_keys)):
+        TP = 0
+        TN = 0
+        FN = 0
+        FP = 0
+        for j in range(len(predicted)):
+            if (predicted[j, i].item() == 1 and targets[j, i].item() == 1):
+                TP = TP+1
+            if (predicted[j, i].item() == 0 and targets[j, i].item() == 0):
+                TN = TN+1
+            if (predicted[j, i].item() == 0 and targets[j, i].item() == 1):
+                FN = FN+1
+            if (predicted[j, i].item() == 1 and targets[j, i].item() == 0):
+                FP = FP+1
+        AU_TP.append(TP)
+        AU_TN.append(TN)
+        AU_FN.append(FN)
+        AU_FP.append(FP)
+    for i in range(len(au_keys)):
+        TPs_in_allset = AU_TP[i] + TPs_in_allset[i]
+        TNs_in_allset = AU_TN[i] + TNs_in_allset[i]
+        FNs_in_allset = AU_FN[i] + FNs_in_allset[i]
+        FPs_in_allset = AU_FP[i] + FPs_in_allset[i]
+
+
 def calculate_Acc(outputs,targets,acc_sum_allset,total_sum_allset,acc_in_allset,au_keys):
     sum_pred = [0 for i in range(len(au_keys))]  # 一个batch的准确率之和
     m = nn.Sigmoid()
@@ -84,6 +121,7 @@ def calculate_Acc(outputs,targets,acc_sum_allset,total_sum_allset,acc_in_allset,
             else:
                 acc_in_allset[i] = 0
     return acc_in_allset
+
 # Training
 def train(epoch):
     print('\nEpoch: %d' % epoch)
@@ -99,7 +137,7 @@ def train(epoch):
         optimizer.zero_grad()
         # inputs.type/shape:torch.Tensor/[128,3,224,224]
         # targets的shape是batch_size * 12
-        outputs = net(inputs) #train还是这么写 验证集也不用改 在MyNets里面把2DCNN和3DCNN写到一起去 然后在forward函数里把静态动态分开，想办法把两者的feature map进行concat reshape再送进Transformer里面
+        outputs = net(inputs)
         # functional.BCE_with_logits自范带对预测分数进行sigmoid操作，因此可以无所谓outputs的取值
         loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='mean',pos_weight=weight).to(device)
         # flood = (loss - 0.6).abs() + 0.6
@@ -115,14 +153,16 @@ def train(epoch):
     train_acc=sum(train_acc_in_allset)/len(train_acc_in_allset)
     print(train_acc)
     return train_loss,train_acc,Aus_dict
+
 @torch.no_grad()
 def val(epoch):
     print('\nEpoch(validation): %d' % epoch)
     net.eval()
     val_loss = 0
-    acc_sum_allset = [0 for i in range(len(au_keys))]   #整个set的概率和
-    total_sum_allset = [0 for i in range(len(au_keys))] #整个set的AU数量
-    acc_in_allset = [0 for i in range(len(au_keys))] #整个set的准确率
+    TPs_in_allset = [0 for i in range(len(au_keys))]  # 整个set的TPs
+    TNs_in_allset = [0 for i in range(len(au_keys))]
+    FNs_in_allset = [0 for i in range(len(au_keys))]
+    FPs_in_allset = [0 for i in range(len(au_keys))]
     weight=weighted(valloader).to(device)
     for batch_idx, (inputs, targets) in enumerate(tqdm(valloader)):
         inputs, targets = inputs.to(device), targets.to(device).squeeze(dim=1).float()
@@ -130,36 +170,53 @@ def val(epoch):
         outputs = net(inputs)
         loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='mean',pos_weight=weight).to(device)
         val_loss=val_loss+loss.item()
-        val_acc_in_allset = calculate_Acc(outputs, targets, acc_sum_allset, total_sum_allset, acc_in_allset, au_keys)
-    Aus_dict = {}
+        Get_TPs(outputs,targets,TPs_in_allset,TNs_in_allset,FNs_in_allset,FPs_in_allset)
+    p = []
+    r = []
+    F1 = []
+    acc = []
     for i in range(len(au_keys)):
-        Aus_dict.update({au_keys[i]: val_acc_in_allset[i]})
-    print(Aus_dict)
+        p.append(TPs_in_allset[i] / (TPs_in_allset[i] + FPs_in_allset[i]))
+        r.append(TPs_in_allset[i] / (TPs_in_allset[i] + FNs_in_allset[i]))
+        F1.append(2 * r[i] * p[i] / (r[i] + p[i]))
+        acc.append((TPs_in_allset[i] + TNs_in_allset[i]) / (TPs_in_allset[i] + TNs_in_allset[i] + FPs_in_allset[i] + FNs_in_allset[i]))
+    Aus_acc_dict = {}
+    Aus_F1_dict = {}
+    for i in range(len(au_keys)):
+        Aus_acc_dict.update({au_keys[i]: acc[i]})
+        Aus_F1_dict.update({au_keys[i]: F1[i]})
+    print("Accuracy:"+Aus_acc_dict)
+    print("F1_Score:"+Aus_F1_dict)
     val_loss = val_loss / (batch_idx+1)
-    val_acc = sum(val_acc_in_allset) / len(val_acc_in_allset)
-    print(val_acc)
-    return val_loss, val_acc,Aus_dict
+    val_acc = sum(acc) / len(acc)
+    val_F1 = sum(F1) / len(F1)
+    print("Avg_Acc:"+val_acc)
+    print("Avg_F1"+val_F1)
+    return val_loss, val_acc,val_F1,Aus_acc_dict,Aus_F1_dict
 
 def main():
     for epoch in range(start_epoch + 1, num_epoch):
         loss_dict = {}
         acc_dict = {}
         tra_loss,tra_acc,Aus_in_tra = train(epoch)
-        tes_loss,tes_acc,Aus_in_tes = val(epoch)
+        val_loss,val_acc,val_F1,Aus_in_val,Aus_F1 = val(epoch)
         loss_dict.update({'train_loss': tra_loss})
-        loss_dict.update({'val_loss': tes_loss})
+        loss_dict.update({'val_loss': val_loss})
         acc_dict.update({'train_acc': tra_acc})
-        acc_dict.update({'val_acc': tes_acc})
+        acc_dict.update({'val_acc': val_acc})
+        acc_dict.update({'val_F1': val_F1})
         writer1.add_scalars('loss', loss_dict, global_step=epoch)
         writer1.add_scalars('acc', acc_dict, global_step=epoch)
         writer1.add_scalars('Aus_in_train', Aus_in_tra, global_step=epoch)
-        writer1.add_scalars('Aus_in_val', Aus_in_tes, global_step=epoch)
+        writer1.add_scalars('Aus_in_val', Aus_in_val, global_step=epoch)
+        writer1.add_scalars('Aus_in_val_F1', Aus_F1, global_step=epoch)
         checkpoint = {
             'epoch': epoch,
             'model_state_dict': net.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
         }
         torch.save(checkpoint, args.PATH_Checkpoint)
+
 def data_augmentation():
     print('==> Preparing data...')
     sequences, _ = BP4D_load_data.get_sequences_task()   # sequences, _ filenames
@@ -176,6 +233,7 @@ def data_augmentation():
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
     return train_seq,val_seq,transform_train,transform_val
+
 # ---------------------------------------------------------------------------------
 if __name__=="__main__":
     # parameters
@@ -203,7 +261,7 @@ if __name__=="__main__":
 
     #Models
     print("start the net")
-    Nets = {"ResNet34":ResNet34(12),"L_Net":L_Net(12),"Transformer":Transformer(12),"ViT":ViT(12),
+    Nets = {"ResNet34":ResNet34(12),"L_Net":L_Net(12),"Transformer":Transformer(12),"Vit":Vit(12),
             "ResViT":ResViT(12),"TransformerMLP":TransformerMlp(12),"ResNet3D":Resnet3D(12),
             "Transformer3D":Transformer3D(12),"Transformer3DMlp":Transformer3DMLP(12),"ViT3D":ViT3D(12)}
     net = Nets[args.model]
@@ -238,7 +296,7 @@ if __name__=="__main__":
 
 
 
-
+#验证集需不需要挑动态数据
 
 
 

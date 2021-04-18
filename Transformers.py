@@ -143,9 +143,9 @@ class ResViT(ResNet34):
         return res  # 1x1，将结果化为(0~1)之间 最后得输出肯定是128x12
 
 # ViT
-class ViT(nn.Module):
+class Vit(nn.Module):
     def __init__(self, num_classes):
-        super(ViT, self).__init__()
+        super(Vit, self).__init__()
         self.Vtrans = ViT(
     image_size = 224,
     patch_size = 32,
@@ -236,7 +236,7 @@ class Transformer3D(Resnet3D):
 #2D and 3D ResNet34 + ViT
 class ViT3D(Resnet3D):
     def __init__(self, num_classes):
-        super(Transformer3D,self).__init__(num_classes)
+        super(ViT3D,self).__init__(num_classes)
         self.Vtans = ViT(
     image_size = 49,
     patch_size = 1,
@@ -250,10 +250,6 @@ class ViT3D(Resnet3D):
     channels = 1024
     )
 
-    def reshape_data(self,x):
-        x = x.transpose(0, 2)  # 49x1024x64
-        input = x.transpose(1, 2)  # 49x64x1024
-        return input
 
     def forward(self, x):  # 224x224x3
         y = x[:,1,:,:,:]
@@ -270,10 +266,8 @@ class ViT3D(Resnet3D):
         x = self.layer1_3D(x)
         x = self.layer2_3D(x)
         x = self.layer3_3D(x)
-        x = self.layer4_3D(x)
-        x = x.reshape([x.shape[0],512,49])
-        y = y.reshape([y.shape[0],512,49])
-        z = torch.cat((x,y),1) #64x1024x49
-        z = self.reshape_data(z)
+        x = self.layer4_3D(x)#bsx512x1x7x7
+        x = torch.squeeze(x)#bsx512x7x7
+        z = torch.cat((x,y),1)#bsx1024x7x7
         z = self.Vtans(z)
         return z

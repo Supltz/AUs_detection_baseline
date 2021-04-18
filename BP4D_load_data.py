@@ -27,7 +27,6 @@ def load_data(sequences):
         else:
             images = images + temp_images
             labels = np.concatenate((labels, temp_labels), axis=0)
-    print("Erasing the dirty data")
     i=0
     while(i!=len(labels)):
         if(sum(labels[i,:])==0):

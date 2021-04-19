@@ -67,30 +67,7 @@ class ResNet34(nn.Module):  # 224x224x3
         return x  # bsx12
 
 
-
-
 #3D ResNet
-
-# def generate_model(model_depth, **kwargs):
-#     assert model_depth in [10, 18, 34, 50, 101, 152, 200]
-#
-#     if model_depth == 10:
-#         model = MixedResNet(BasicBlock, [1, 1, 1, 1], get_inplanes(), **kwargs)
-#     elif model_depth == 18:
-#         model = MixedResNet(BasicBlock, [2, 2, 2, 2], get_inplanes(), **kwargs)
-#     elif model_depth == 34:
-#         model = MixedResNet(BasicBlock, [3, 4, 6, 3], get_inplanes(), **kwargs)
-#     elif model_depth == 50:
-#         model = MixedResNet(Bottleneck, [3, 4, 6, 3], get_inplanes(), **kwargs)
-#     elif model_depth == 101:
-#         model = MixedResNet(Bottleneck, [3, 4, 23, 3], get_inplanes(), **kwargs)
-#     elif model_depth == 152:
-#         model = MixedResNet(Bottleneck, [3, 8, 36, 3], get_inplanes(), **kwargs)
-#     elif model_depth == 200:
-#         model = MixedResNet(Bottleneck, [3, 24, 36, 3], get_inplanes(), **kwargs)
-#
-#     return model
-
 def get_inplanes():
     return [64, 128, 256, 512]
 
@@ -196,8 +173,8 @@ class Resnet3D(ResNet34):
                  widen_factor=1.0,
     ):
         super(Resnet3D,self).__init__(num_classes)
-        block = BasicBlock
-        layers =  [3, 4, 6, 3]
+        block = BasicBlock       #BasicBlock for ResNet10,18,34  while  Bottleneck for ResNet50 101 152 200
+        layers =  [3, 4, 6, 3]# ResNet10:[1, 1, 1, 1] ResNet18:[2, 2, 2, 2] ResNet34 and 50:[3, 4, 6, 3] ResNet101:[3, 4, 23, 3] ResNet152:[3, 8, 36, 3] ResNet200:[3, 24, 36, 3]
         block_inplanes = get_inplanes()
         block_inplanes = [int(x * widen_factor) for x in block_inplanes]
 

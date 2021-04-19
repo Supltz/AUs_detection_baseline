@@ -291,19 +291,21 @@ if __name__=="__main__":
         print('-----------------------------')
         main()
     if(yes_no=="yes"):
-        path_pretrain = args.PATH_pretrain
-        pretrained = torch.load(path_pretrain)
-        model_dict = net.state_dict()
-        pretrained = {k: v for k, v in pretrained.items() if k in model_dict}
-        model_dict.update(pretrained)
-        net.load_state_dict(model_dict)
-        main()
+        if(args.model!="ResNet34"):
+            path_pretrain = args.PATH_pretrain
+            pretrained = torch.load(path_pretrain)
+            model_dict = net.state_dict()
+            pretrained = {k: v for k, v in pretrained.items() if k in model_dict}
+            model_dict.update(pretrained)
+            net.load_state_dict(model_dict)
+            main()
+        else:
+            main()
 
 
 
 
 #验证集需不需要挑动态数据 需不需要3帧标签要不一样
-#让ResNet可以选择层数
 
 
 

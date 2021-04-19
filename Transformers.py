@@ -10,8 +10,10 @@ from vit_pytorch import ViT
 #2D ResNet34 + Encoder + Fc
 class Transformer(ResNet34):
     def __init__(self, num_classes):
+        import main_bp4d
+        self.device = main_bp4d.args.device
         super(Transformer,self).__init__(num_classes)
-        self.transformer = TransformerModel(num=num_classes,ninp=512, nhead=4, nhid=512, nlayers=2, dropout=0.5).to('cuda:1')
+        self.transformer = TransformerModel(num=num_classes,ninp=512, nhead=4, nhid=512, nlayers=2, type="fc").to(self.device)
 
     def reshape_data(self,x):
         x = x.reshape([x.shape[0], 512, 49])  # 128x512x49
@@ -27,7 +29,7 @@ class Transformer(ResNet34):
         x = self.layer4(x)  # 7x7x512
         input = self.reshape_data(x)
         res = self.transformer(input)
-        return res  # 1x1，将结果化为(0~1)之间 最后得输出肯定是128x12
+        return res  # bsx12
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=100):
@@ -48,19 +50,43 @@ class PositionalEncoding(nn.Module):
 
 class TransformerModel(nn.Module):
 
-    def __init__(self, num, ninp, nhead, nhid, nlayers, dropout=0.5):
+    def __init__(self, num, ninp, nhead, nhid, nlayers, type,dropout=0.5,):
         super(TransformerModel, self).__init__()
         self.pos_encoder = PositionalEncoding(ninp, dropout)
         encoder_layers = TransformerEncoderLayer(ninp, nhead, nhid, dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
         self.ninp = ninp
-        self.decoder = nn.Linear(25088, num)
+        if(type=="fc"):
+            self.decoder = nn.Linear(25088, num)
+        elif(type=="3Dfc"):
+            self.decoder = nn.Linear(50176, num)
+        elif(type=="mlp"):
+            self.decoder = nn.Sequential(
+            nn.Linear(25088,2048),
+            nn.GELU(),
+            nn.Dropout(0.2),
+            nn.Linear(2048,4096),
+            nn.Dropout(0.2),
+            nn.LayerNorm(4096),
+            nn.Linear(4096,num)
+            )
+        elif(type=="3Dmlp"):
+            self.decoder = nn.Sequential(
+                nn.Linear(50176, 2048),
+                nn.GELU(),
+                nn.Dropout(0.2),
+                nn.Linear(2048, 4096),
+                nn.Dropout(0.2),
+                nn.LayerNorm(4096),
+                nn.Linear(4096, num)
+            )
+
 
     def forward(self, src):
         src = self.pos_encoder(src)
         output = self.transformer_encoder(src) #49xbsx512
         output = output.transpose(0,1)  #bsx512
-        output = output.reshape([output.size(0),25088])  # 将输出拉伸为一行：1x512
+        output = output.reshape([output.size(0),25088])  # reshape to 2 dimensions
         output = self.decoder(output)
         return output
 
@@ -69,7 +95,9 @@ class TransformerModel(nn.Module):
 class TransformerMlp(ResNet34):
     def __init__(self, num_classes):
         super(TransformerMlp,self).__init__(num_classes)
-        self.transformer = TransformerModel_MLP(num=num_classes,ninp=512, nhead=4, nhid=512, nlayers=2, dropout=0.5).to('cuda:1')
+        import main_bp4d
+        self.device = main_bp4d.args.device
+        self.transformer = TransformerModel(num=num_classes,ninp=512, nhead=4, nhid=512, nlayers=2, type="mlp").to(self.device)
 
     def reshape_data(self,x):
         x = x.reshape([x.shape[0], 512, 49])  # 128x512x49
@@ -85,33 +113,8 @@ class TransformerMlp(ResNet34):
         x = self.layer4(x)  # 7x7x512
         input = self.reshape_data(x)
         res = self.transformer(input)
-        return res  # 1x1，将结果化为(0~1)之间 最后得输出肯定是128x12
+        return res  # bsx12
 
-class TransformerModel_MLP(nn.Module):
-
-    def __init__(self, num, ninp, nhead, nhid, nlayers, dropout=0.5):
-        super(TransformerModel_MLP, self).__init__()
-        self.pos_encoder = PositionalEncoding(ninp, dropout)
-        encoder_layers = TransformerEncoderLayer(ninp, nhead, nhid, dropout)
-        self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
-        self.ninp = ninp
-        self.decoder = nn.Sequential(
-            nn.Linear(50176,2048),
-            nn.GELU(),
-            nn.Dropout(0.2),
-            nn.Linear(2048,4096),
-            nn.Dropout(0.2),
-            nn.LayerNorm(4096),
-            nn.Linear(4096,num)
-        )
-
-    def forward(self, src):
-        src = self.pos_encoder(src)
-        output = self.transformer_encoder(src) #49xbsx512
-        output = output.transpose(0,1)  #bsx512
-        output = output.reshape([output.size(0),50176])  # 将输出拉伸为一行：1x512
-        output = self.decoder(output)
-        return output
 
 
 
@@ -140,7 +143,7 @@ class ResViT(ResNet34):
         x = self.layer3(x)  # 14x14x256
         x = self.layer4(x)  # 7x7x512
         res = self.Vtrans(x)
-        return res  # 1x1，将结果化为(0~1)之间 最后得输出肯定是128x12
+        return res  # bsx12
 
 # ViT
 class Vit(nn.Module):
@@ -149,7 +152,7 @@ class Vit(nn.Module):
         self.Vtrans = ViT(
     image_size = 224,
     patch_size = 32,
-    num_classes = 12,
+    num_classes = num_classes,
     dim = 1024,
     depth = 8,
     heads = 16,
@@ -169,7 +172,9 @@ class Vit(nn.Module):
 class Transformer3DMLP(Resnet3D):
     def __init__(self, num_classes):
         super(Transformer3DMLP,self).__init__(num_classes)
-        self.transformer = TransformerModel_MLP(num=num_classes,ninp=1024, nhead=4, nhid=1024, nlayers=2, dropout=0.5).to('cuda:1')
+        import main_bp4d
+        self.device = main_bp4d.args.device
+        self.transformer = TransformerModel(num=num_classes,ninp=1024, nhead=4, nhid=1024, nlayers=2, type="3Dmlp").to(self.device)
 
     def reshape_data(self,x):
         x = x.transpose(0, 2)  # 49x1024x64
@@ -203,7 +208,9 @@ class Transformer3DMLP(Resnet3D):
 class Transformer3D(Resnet3D):
     def __init__(self, num_classes):
         super(Transformer3D,self).__init__(num_classes)
-        self.transformer = TransformerModel(num=num_classes,ninp=1024, nhead=4, nhid=1024, nlayers=2, dropout=0.5).to('cuda:1')
+        import main_bp4d
+        self.device = main_bp4d.args.device
+        self.transformer = TransformerModel(num=num_classes,ninp=1024, nhead=4, nhid=1024, nlayers=2, type="3Dfc").to(self.device)
 
     def reshape_data(self,x):
         x = x.transpose(0, 2)  # 49x1024x64

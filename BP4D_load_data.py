@@ -14,7 +14,7 @@ def get_sequences_task():
     return sequences, task
 
 def load_data(sequences):
-    # 用于读取pkl中的数据，并将不同序列的数据整合到一起。用于获得train和validation等
+    # read data from .pkl and divide all types of data
     import main_bp4d
     pkl_folder = os.path.join(main_bp4d.args.PATH_dataset)
     type = main_bp4d.args.datatype

@@ -9,7 +9,6 @@ import numpy as np
 # Datasets
 
 # class MyDisfa(Dataset):
-#     # MyDataset继承Dataset, 重载了__init__, __getitem__, __len__
 #     def __init__(self, seq, train=True, transform=None, target_transform=None):
 #         self._seq = seq
 #         self._train = train
@@ -59,7 +58,7 @@ class MyBP4D(Dataset):
             image, target = self._train_data[index], self._train_labels[index]
         else:
             image, target = self._val_data[index], self._val_labels[index]
-        #这里的image是四维的array 要再把他分开 分别做transforms 之后再合并
+        #4D array division and re-pack
         import main_bp4d
         type = main_bp4d.args.datatype
         if(type=="dynamic"):

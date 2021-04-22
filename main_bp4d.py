@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 import warnings
 import argparse
+import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
 #args and settings
@@ -16,10 +17,10 @@ writer1 = SummaryWriter('runs_20')
 parser = argparse.ArgumentParser('parameters', add_help=False)
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--batchsize', default=64, type=int)
-parser.add_argument('--device', default="cuda:0", type=str)
+parser.add_argument('--device', default="cuda:1", type=str)
 parser.add_argument('--num_epoch', default=300, type=int)
 parser.add_argument('--num_workers', default=0, type=int)
-parser.add_argument('--N_fold', default=6, type=int, help="the ratio of train and validation data")
+parser.add_argument('--N_fold', default=8, type=int, help="the ratio of train and validation data")
 parser.add_argument('--PATH_Checkpoint', default="./checkpoint/CHECKPOINT_FILE", type=str)
 parser.add_argument('--PATH_pretrain', default="./Resnet34model/model_state.pth", type=str)
 parser.add_argument('--PATH_dataset', default="./", type=str)
@@ -53,25 +54,24 @@ def Get_TPs(outputs, targets,TPs_in_allset,TNs_in_allset,FNs_in_allset,FPs_in_al
     AU_TN = []
     AU_FN = []
     AU_FP = []
+    predicted_array = np.zeros((len(predicted),len(au_keys)))
     for i in range(len(predicted)):
         for j in range(len(au_keys)):
-            if(predicted[i,j].item()<0.5):
-                predicted[i,j]=0
-            else:
-                predicted[i,j]=1
+            if(predicted[i,j].item() >= 0.5):
+                predicted_array[i,j]=1
     for i in range(len(au_keys)):
         TP = 0
         TN = 0
         FN = 0
         FP = 0
         for j in range(len(predicted)):
-            if (predicted[j, i].item() == 1 and targets[j, i].item() == 1):
+            if (predicted_array[j, i] == 1 and targets[j, i].item() == 1):
                 TP = TP+1
-            if (predicted[j, i].item() == 0 and targets[j, i].item() == 0):
+            if (predicted_array[j, i] == 0 and targets[j, i].item() == 0):
                 TN = TN+1
-            if (predicted[j, i].item() == 0 and targets[j, i].item() == 1):
+            if (predicted_array[j, i] == 0 and targets[j, i].item() == 1):
                 FN = FN+1
-            if (predicted[j, i].item() == 1 and targets[j, i].item() == 0):
+            if (predicted_array[j, i] == 1 and targets[j, i].item() == 0):
                 FP = FP+1
         AU_TP.append(TP)
         AU_TN.append(TN)
@@ -305,7 +305,8 @@ if __name__=="__main__":
 
 
 
-#验证集需不需要挑动态数据 需不需要3帧标签要不一样
+# 验证集不需要挑动态数据
+# pretrain ResNet34 Face
 
 
 

@@ -13,7 +13,7 @@ class Transformer(ResNet34):
         import main_bp4d
         self.device = main_bp4d.args.device
         super(Transformer,self).__init__(num_classes)
-        self.transformer = TransformerModel(num=num_classes,ninp=512, nhead=4, nhid=512, nlayers=2, type="fc").to(self.device)
+        self.transformer = TransformerModel(num=num_classes,ninp=512, nhead=16, nhid=512, nlayers=2, type="fc").to(self.device)
 
     def reshape_data(self,x):
         x = x.reshape([x.shape[0], 512, 49])  # 128x512x49
@@ -97,7 +97,7 @@ class TransformerMlp(ResNet34):
         super(TransformerMlp,self).__init__(num_classes)
         import main_bp4d
         self.device = main_bp4d.args.device
-        self.transformer = TransformerModel(num=num_classes,ninp=512, nhead=4, nhid=512, nlayers=2, type="mlp").to(self.device)
+        self.transformer = TransformerModel(num=num_classes,ninp=512, nhead=16, nhid=512, nlayers=2, type="mlp").to(self.device)
 
     def reshape_data(self,x):
         x = x.reshape([x.shape[0], 512, 49])  # 128x512x49
@@ -165,7 +165,7 @@ class Vit(nn.Module):
 
     def forward(self, x):  # 224x224x3
         res = self.Vtrans(x)
-        return res  # 1x1，将结果化为(0~1)之间 最后得输出肯定是128x12
+        return res  # bsx12
 
 
 #2D and 3D ResNet34 + Encoder + Mlp
@@ -174,7 +174,7 @@ class Transformer3DMLP(Resnet3D):
         super(Transformer3DMLP,self).__init__(num_classes)
         import main_bp4d
         self.device = main_bp4d.args.device
-        self.transformer = TransformerModel(num=num_classes,ninp=1024, nhead=4, nhid=1024, nlayers=2, type="3Dmlp").to(self.device)
+        self.transformer = TransformerModel(num=num_classes,ninp=1024, nhead=16, nhid=1024, nlayers=2, type="3Dmlp").to(self.device)
 
     def reshape_data(self,x):
         x = x.transpose(0, 2)  # 49x1024x64
@@ -210,7 +210,7 @@ class Transformer3D(Resnet3D):
         super(Transformer3D,self).__init__(num_classes)
         import main_bp4d
         self.device = main_bp4d.args.device
-        self.transformer = TransformerModel(num=num_classes,ninp=1024, nhead=4, nhid=1024, nlayers=2, type="3Dfc").to(self.device)
+        self.transformer = TransformerModel(num=num_classes,ninp=1024, nhead=16, nhid=1024, nlayers=2, type="3Dfc").to(self.device)
 
     def reshape_data(self,x):
         x = x.transpose(0, 2)  # 49x1024x64

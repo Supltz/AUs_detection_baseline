@@ -294,6 +294,8 @@ if __name__=="__main__":
         if(args.model!="ResNet34"):
             path_pretrain = args.PATH_pretrain
             pretrained = torch.load(path_pretrain)
+            if(args.device=="cuda:0"):
+                pretrained = torch.load(path_pretrain, map_location={'cuda:1':'cuda:0'})
             model_dict = net.state_dict()
             pretrained = {k: v for k, v in pretrained.items() if k in model_dict}
             model_dict.update(pretrained)

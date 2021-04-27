@@ -24,10 +24,10 @@ parser.add_argument('--N_fold', default=8, type=int, help="the ratio of train an
 parser.add_argument('--PATH_Checkpoint', default="./checkpoint/CHECKPOINT_FILE", type=str)
 parser.add_argument('--PATH_pretrain', default="./Resnet34model/model_state.pth", type=str)
 parser.add_argument('--PATH_dataset', default="./", type=str)
-parser.add_argument('--datatype', default=None, type=str, help="choose from dynamic dynamic_in_frames static")
+parser.add_argument('--datatype', default=None, required=True,type=str, help="choose from dynamic dynamic_in_frames static")
 parser.add_argument('--dataset', default="BP4D", type=str)
-parser.add_argument('--FirstTimeRunning', default=None, type=str, help="No means reading from the checkpoint_file")
-parser.add_argument('--model', default=None, type=str, help="choose from ResNet34,L_Net,Transformer,Vit,ResViT,TransformerMLP,ResNet3D,Transformer3D,Transformer3DMlp,ViT3D")
+parser.add_argument('--FirstTimeRunning', default=None,required=True, type=str, help="No means reading from the checkpoint_file")
+parser.add_argument('--model', default=None, type=str, required=True,help="choose from ResNet34,L_Net,Transformer,Vit,ResViT,TransformerMLP,ResNet3D,Transformer3D,Transformer3DMlp,ViT3D")
 args = parser.parse_args()
 
 # weight
@@ -138,8 +138,8 @@ def train(epoch):
         outputs = net(inputs)
         # functional.BCE_with_logits includes sigmoid
         loss = F.binary_cross_entropy_with_logits(outputs, targets, reduction='mean',pos_weight=weight).to(device)
-        # flood = (loss - 0.6).abs() + 0.6
-        loss.backward()    #could use loss flooding
+        flood = (loss - 0.6).abs() + 0.6
+        flood.backward()    #could use loss flooding
         optimizer.step()
         train_loss += loss.item()
         train_acc_in_allset=calculate_Train_Acc(outputs,targets,acc_sum_allset,total_sum_allset,acc_in_allset)
@@ -166,6 +166,7 @@ def val(epoch):
     FNs_in_allset = [0 for i in range(len(au_keys))]
     FPs_in_allset = [0 for i in range(len(au_keys))]
     weight=weighted(valloader).to(device)
+    epsilon = 1e-7
     for batch_idx, (inputs, targets) in enumerate(tqdm(valloader)):
         inputs, targets = inputs.to(device), targets.to(device).squeeze(dim=1).float()
         optimizer.zero_grad()
@@ -180,7 +181,7 @@ def val(epoch):
     for i in range(len(au_keys)):
         p.append(TPs_in_allset[i] / (TPs_in_allset[i] + FPs_in_allset[i]))
         r.append(TPs_in_allset[i] / (TPs_in_allset[i] + FNs_in_allset[i]))
-        F1.append(2 * r[i] * p[i] / (r[i] + p[i]))
+        F1.append(2 * r[i] * p[i] / (r[i] + p[i]+epsilon))
         acc.append((TPs_in_allset[i] + TNs_in_allset[i]) / (TPs_in_allset[i] + TNs_in_allset[i] + FPs_in_allset[i] + FNs_in_allset[i]))
     Aus_acc_dict = {}
     Aus_F1_dict = {}
@@ -306,8 +307,6 @@ if __name__=="__main__":
 
 
 
-
-# 验证集不需要挑动态数据
 # pretrain ResNet34 Face
 
 

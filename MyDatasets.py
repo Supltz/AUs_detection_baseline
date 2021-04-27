@@ -49,9 +49,9 @@ class MyBP4D(Dataset):
         self._target_transform = target_transform
 
         if self._train:
-            self._train_data, self._train_labels = BP4D_load_data.load_train_data(self._seq)
+            self._train_data, self._train_labels = BP4D_load_data.load_data(self._seq)
         else:
-            self._val_data, self._val_labels = BP4D_load_data.load_val_data(self._seq)
+            self._val_data, self._val_labels = BP4D_load_data.load_data(self._seq)
 
     def __getitem__(self, index):
         if self._train:
@@ -123,10 +123,7 @@ class MyBP4D(Dataset):
 def get_train_val(seq, fold=0):                  # cross_validation ? 验证集的前几个可能有空值了
     # 划分train和validation
     import main_bp4d
-    if(main_bp4d.args.datatype=="dynamic" or main_bp4d.args.datatype=="dynamic_in_frames"):
-        num_fold = 16
-    else:
-        num_fold=main_bp4d.args.N_fold
+    num_fold=main_bp4d.args.N_fold
     split = len(seq) // num_fold
 
     if fold == (num_fold - 1):
